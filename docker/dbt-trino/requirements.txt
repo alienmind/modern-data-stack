@@ -1,0 +1,5 @@
+dbt==1.0.0.34.4
+dbt-core==1.5.8
+dbt-rpc==0.4.2
+dbt-trino==1.5.1
+trino==0.327.0

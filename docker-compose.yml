@@ -95,6 +95,27 @@ services:
     networks:
       - data-stack
 
+
+  dbt:
+    hostname: dbt
+    container_name: dbt
+    build: docker/dbt-trino
+    image: alienmind/dbt
+    volumes:
+     - ./data/dbt-project:/app
+    ports:
+      - 8580:8580
+    environment:
+      TRINO_HOST: trino
+      TRINO_PORT: 9080
+      TRINO_USER: ${TRINO_USER}
+      TRINO_PASSWD: ${TRINO_PASSWD}
+      TRINO_DB: ${TRINO_DB}
+      TRINO_SCHEMA: ${TRINO_SCHEMA}
+      TRINO_HTTP_SCHEME: http
+    networks:
+      - data-stack
+
 volumes:
   minio-data:
     driver: local
@@ -108,8 +129,12 @@ volumes:
   spark-notebooks-data:
     driver: local
 
+  dbt:
+    driver: local
+
 networks:
   data-stack:
+    name: data-stack-net
     driver: bridge
     ipam:
       config:

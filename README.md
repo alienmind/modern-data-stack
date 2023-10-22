@@ -128,6 +128,107 @@ Additionally, since trino does not allow to redefine the S3 endpoint when using 
 
 **Spark works perfectly well with Iceberg REST catalog** and the spark-defaults needed are is [this file](docker/spark-iceberg/conf/spark-defaults.conf). However, the **selected metastore is HMS** mainly for compatibility issues (specially with trino)
 
+### DBT RPC check
+
+DBT is deployed in a container with an /app directory pointing to [data/dbt-project](./data/dbt-project).
+
+[DBT-RPC](https://docs.getdbt.com/reference/commands/rpc) will be running & waiting for commands over this project
+You can check that DBT-RPC is serving by issuing a status command using curl:
+
+```bash
+curl --header 'Content-Type: application/json' --data-raw '{ "jsonrpc": "2.0", "method": "status", "id": "000000000" }' -XPOST localhost:8580/jsonrpc
+```
+
+### SSB demo
+
+Star Schema benchmark (SSB for short) is designed to measure performance of database products in support of classical data warehousing applications, and is based on TPC-H benchmark.
+
+Use trino cli to deploy a schema for SSB
+```bash
+docker-compose exec trino trino
+```
+
+And then run:
+```sql
+CREATE SCHEMA IF NOT EXISTS hms.ssb WITH (location = 's3a://warehouse/ssb');
+```
+
+The schema is as follows:
+
+![SSB schema](./img/ssb.png)
+
+
+### Deploy DWH (SSB)
+
+Install dbt packages
+
+ ```bash
+ dbt deps
+ ```
+
+Stage data sources with dbt macro
+Source data will be staged as EXTERNAL TABLES (S3) using dbt macro [ssb_ddl](./macros/ssb_ddl.sql):
+
+```bash
+dbt run-operation ssb_ddl
+```
+
+Statements will be executed one by one to avoid error:
+
+```
+DB::Exception: Syntax error (Multi-statements are not allowed)
+```
+
+## Describe sources in [sources.yml](./models/sources/sources.yml) file
+
+## Build staging models:
+
+```bash
+dbt build -s tag:staging
+```
+
+Check model configurations: `engine`, `order_by`, `partition_by`
+
+## Prepare a data mart (wide table)
+
+Join all the tables into one [f_lineorder_flat](./models/marts/f_lineorder_flat.sql):
+
+```bash
+dbt build -s f_lineorder_flat
+```
+
+Pay attentions to models being tested for keys being unique, not null.
+
+## Model read-optimized Data Mart
+
+Turn the following SQL into dbt model [f_orders_stats](./models/marts/f_orders_stats.sql):
+
+```sql
+SELECT
+    toYear(O_ORDERDATE) AS O_ORDERYEAR
+    , O_ORDERSTATUS
+    , O_ORDERPRIORITY
+    , count(DISTINCT O_ORDERKEY) AS num_orders
+    , count(DISTINCT C_CUSTKEY) AS num_customers
+    , sum(L_EXTENDEDPRICE * L_DISCOUNT) AS revenue
+FROM -- PLEASE USE dbt's ref('') to ensure valid DAG execution!
+WHERE 1=1
+GROUP BY
+    toYear(O_ORDERDATE)
+    , O_ORDERSTATUS
+    , O_ORDERPRIORITY
+```
+
+Make sure the tests pass:
+
+```bash
+dbt build -s f_orders_stats
+```
+
+![](./docs/f_orders_stats.png)
+
+
+
 ## Useful links
 
 * https://iceberg.apache.org/spark-quickstart/
@@ -142,3 +243,15 @@ Additionally, since trino does not allow to redefine the S3 endpoint when using 
 * https://dev.to/alexmercedcoder/configuring-apache-spark-for-apache-iceberg-2d41
 * https://iceberg.apache.org/docs/latest/configuration/#catalog-properties
 
+## SSB links
+* https://www.cs.umb.edu/~poneil/StarSchemaB.PDF: SSB original paper
+* https://arxiv.org/pdf/1701.00399.pdf : Benchmarking DWH
+* https://github.com/Kyligence/ssb-kylin
+* https://clickhouse.tech/docs/en/getting-started/example-datasets/star-schema/
+
+## dbt links
+* https://docs.getdbt.com/docs/core/docker-install
+* https://docs.getdbt.com/reference/commands/rpc
+* https://itnext.io/the-way-to-integrate-trino-etl-jobs-using-dbt-trino-with-airflow-on-kubernetes-51cc851a366
+* https://medium.com/data-engineer-things/transforming-data-engineering-a-deep-dive-into-dbt-with-duckdb-ddd3a0c1e0c2
+* https://github.com/dbt-labs/dbt-starburst-demo/tree/main

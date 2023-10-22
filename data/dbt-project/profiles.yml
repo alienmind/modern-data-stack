@@ -1,0 +1,23 @@
+config:
+  send_anonymous_usage_stats: False
+  use_colors: True
+  partial_parse: True
+
+dbt_starschema_trino:
+  outputs:
+    dev:
+      type: trino
+      user: "{{ env_var('TRINO_USER') }}"
+      password: "{{ env_var('TRINO_PASSWD') }}"
+      host: "{{ env_var('TRINO_HOST') }}"
+      port: 9080
+      database:  "{{ env_var('TRINO_DB') }}"
+      schema:   "{{ env_var('TRINO_SCHEMA') }}"
+      threads: 1
+      http_scheme:  "{{ env_var('TRINO_HTTP_SCHEME') }}"
+      secure: True
+      verify: False
+      session_properties:
+        query_max_run_time: 4h
+        exchange_compression: True
+  target: dev

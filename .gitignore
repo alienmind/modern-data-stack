@@ -1,2 +1,7 @@
 lib/*.jar
 data/notebooks/.ipynb_checkpoints
+target/
+dbt_packages/
+logs/
+.env
+.DS_Store
