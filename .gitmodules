@@ -1,0 +1,3 @@
+[submodule "docker/ssb-dbgen/ssb-dbgen"]
+	path = docker/ssb-dbgen/ssb-dbgen
+	url = https://github.com/alienmind/ssb-dbgen

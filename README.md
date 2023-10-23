@@ -111,23 +111,6 @@ CREATE TABLE IF NOT EXISTS hms.nyc200.sales_from_trino (
 select * from hms.nyc200.sales_from_trino;
 ```
 
-## Compatibility issues
-
-### Apache Hive MetaStore
-
-**[2023/08/26]** Since Apache Hive team publishes in [docker hub](https://hub.docker.com/r/apache/hive/tags) linux/amd64 images for both v3 and v4 (alpha and beta prereleases), I decided to test them:
- * Both alpha v4 and beta v4 prereleases work perfectly well but Trino v425 is only compatible with [Hive Metastore Thrift API v3.1](https://github.com/trinodb/trino/blob/39af728fa5e474d5537ede364f7599c941541f2f/pom.xml#L1393). In real life usage, this produces some incompatibility errors when using trino that can be easily reproduced using [hive4 branch](https://github.com/macvaz/modern_data_stack/tree/hive4) of this repo.
-
- * [Official Hive 3.1.3 docker image](https://hub.docker.com/layers/apache/hive/3.1.3/images/sha256-d3d2b8dff7c223b4a024a0393e5c89b1d6cb413e91d740526aebf4e6ecd8f75e?context=explore) does not start, showing database initializacions errors. Consecuently, I wrote my own [Dockerfile](docker/hive-metastore/Dockerfile) for installing HMS 3.1.3.
-
-### Apache Iceberg REST catalog
-
-**[2023/09/03]** Trino is compatible with [several metastore catalogs](https://iceberg.apache.org/concepts/catalog/) apart from Hive Metastore like REST Catalog and JDBC Catalog. However [trino does not have full suport](https://trino.io/docs/current/connector/metastores.html) for them, making imposible to crate views and materialized views with REST Catalog and JDBC Catalog. Consequently, modern-data-stack is still based on Hive MetaStore (HMS) until this limitations are overcame.
-
-Additionally, since trino does not allow to redefine the S3 endpoint when using the REST catalog, trino will always try to connect to AWS S3 public cloud and not to local MinIO. Iceberg REST catalog is not an option currently for this PoC.
-
-**Spark works perfectly well with Iceberg REST catalog** and the spark-defaults needed are is [this file](docker/spark-iceberg/conf/spark-defaults.conf). However, the **selected metastore is HMS** mainly for compatibility issues (specially with trino)
-
 ### DBT RPC check
 
 DBT is deployed in a container with an /app directory pointing to [data/dbt-project](./data/dbt-project).
@@ -156,6 +139,19 @@ CREATE SCHEMA IF NOT EXISTS hms.ssb WITH (location = 's3a://warehouse/ssb');
 The schema is as follows:
 
 ![SSB schema](./img/ssb.png)
+
+### Generate SSB input data
+
+We can generate input synthetic data using [ssb-dbgen](./docker/ssb-dbgen/ssb-dbgen/README)
+
+```bash
+docker build -t alienmind/ssb-dbgen docker/ssb-dbgen
+```
+
+Run:
+```bash
+docker run -v $PWD/data/ssb:/data alienmind/ssb-dbgen
+```
 
 
 ### Deploy DWH (SSB)
@@ -227,6 +223,22 @@ dbt build -s f_orders_stats
 
 ![](./docs/f_orders_stats.png)
 
+## Compatibility issues
+
+### Apache Hive MetaStore
+
+**[2023/08/26]** Since Apache Hive team publishes in [docker hub](https://hub.docker.com/r/apache/hive/tags) linux/amd64 images for both v3 and v4 (alpha and beta prereleases), I decided to test them:
+ * Both alpha v4 and beta v4 prereleases work perfectly well but Trino v425 is only compatible with [Hive Metastore Thrift API v3.1](https://github.com/trinodb/trino/blob/39af728fa5e474d5537ede364f7599c941541f2f/pom.xml#L1393). In real life usage, this produces some incompatibility errors when using trino that can be easily reproduced using [hive4 branch](https://github.com/macvaz/modern_data_stack/tree/hive4) of this repo.
+
+ * [Official Hive 3.1.3 docker image](https://hub.docker.com/layers/apache/hive/3.1.3/images/sha256-d3d2b8dff7c223b4a024a0393e5c89b1d6cb413e91d740526aebf4e6ecd8f75e?context=explore) does not start, showing database initializacions errors. Consecuently, I wrote my own [Dockerfile](docker/hive-metastore/Dockerfile) for installing HMS 3.1.3.
+
+### Apache Iceberg REST catalog
+
+**[2023/09/03]** Trino is compatible with [several metastore catalogs](https://iceberg.apache.org/concepts/catalog/) apart from Hive Metastore like REST Catalog and JDBC Catalog. However [trino does not have full suport](https://trino.io/docs/current/connector/metastores.html) for them, making imposible to crate views and materialized views with REST Catalog and JDBC Catalog. Consequently, modern-data-stack is still based on Hive MetaStore (HMS) until this limitations are overcame.
+
+Additionally, since trino does not allow to redefine the S3 endpoint when using the REST catalog, trino will always try to connect to AWS S3 public cloud and not to local MinIO. Iceberg REST catalog is not an option currently for this PoC.
+
+**Spark works perfectly well with Iceberg REST catalog** and the spark-defaults needed are is [this file](docker/spark-iceberg/conf/spark-defaults.conf). However, the **selected metastore is HMS** mainly for compatibility issues (specially with trino)
 
 
 ## Useful links
@@ -246,8 +258,8 @@ dbt build -s f_orders_stats
 ## SSB links
 * https://www.cs.umb.edu/~poneil/StarSchemaB.PDF: SSB original paper
 * https://arxiv.org/pdf/1701.00399.pdf : Benchmarking DWH
-* https://github.com/Kyligence/ssb-kylin
-* https://clickhouse.tech/docs/en/getting-started/example-datasets/star-schema/
+* https://github.com/electrum/ssb-dbgen : Data generation tool
+* https://github.com/vadimtk/ssb-dbgen : With some fixes (adapted for Clickhouse)
 
 ## dbt links
 * https://docs.getdbt.com/docs/core/docker-install
@@ -255,3 +267,7 @@ dbt build -s f_orders_stats
 * https://itnext.io/the-way-to-integrate-trino-etl-jobs-using-dbt-trino-with-airflow-on-kubernetes-51cc851a366
 * https://medium.com/data-engineer-things/transforming-data-engineering-a-deep-dive-into-dbt-with-duckdb-ddd3a0c1e0c2
 * https://github.com/dbt-labs/dbt-starburst-demo/tree/main
+
+## Two other SSB+DBT implementations for other engines
+* https://github.com/Kyligence/ssb-kylin
+* https://clickhouse.tech/docs/en/getting-started/example-datasets/star-schema/
